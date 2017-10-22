@@ -173,7 +173,7 @@ class App < Sinatra::Base
         FROM message
         JOIN user ON user.id = message.user_id
        WHERE message.id > ? AND message.channel_id = ?
-    ORDER BY message.id
+    ORDER BY message.id DESC
        LIMIT 100
     SQL
 
