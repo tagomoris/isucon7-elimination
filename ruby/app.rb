@@ -230,7 +230,7 @@ class App < Sinatra::Base
     rows.each do |row|
       r = {}
       r['id'] = row['id']
-      r['user'] = db.xquery('SELECT name, display_name, avatar_icon FROM user WHERE id = ?', row['user_id'])
+      r['user'] = db.xquery('SELECT name, display_name, avatar_icon FROM user WHERE id = ?', row['user_id']).first
       r['date'] = row['created_at'].strftime("%Y/%m/%d %H:%M:%S")
       r['content'] = row['content']
       @messages << r
