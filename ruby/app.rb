@@ -9,7 +9,7 @@ require 'redis'
 require 'oj'
 require 'sinatra/base'
 
-$redis = ConnectionPool.new(size: 4, timeout: 3) do
+$redis = ConnectionPool.new(size: 64, timeout: 3) do
   Redis.new(url: ENV.fetch("REDIS_URL", "redis://localhost:6379"))
 end
 
@@ -24,7 +24,7 @@ Mysql2::Client.new(
   encoding: 'utf8mb4'
 ).tap { |db_client| db_client.query('SET SESSION sql_mode=\'TRADITIONAL,NO_AUTO_VALUE_ON_ZERO,ONLY_FULL_GROUP_BY\'') }
 
-$db = ConnectionPool::Wrapper.new(size: 16, timeout: 3) do
+$db = ConnectionPool::Wrapper.new(size: 64, timeout: 3) do
   Mysql2::Client.new(
     host: ENV.fetch('ISUBATA_DB_HOST') { 'localhost' },
     port: ENV.fetch('ISUBATA_DB_PORT') { '3306' },
