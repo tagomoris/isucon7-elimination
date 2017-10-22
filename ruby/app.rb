@@ -163,19 +163,35 @@ class App < Sinatra::Base
 
     channel_id = params[:channel_id].to_i
     last_message_id = params[:last_message_id].to_i
-    rows = db.xquery('SELECT * FROM message WHERE id > ? AND channel_id = ? ORDER BY id DESC LIMIT 100', last_message_id, channel_id).to_a
-    response = []
-    rows.each do |row|
-      r = {}
-      r['id'] = row['id']
-      r['user'] = db.xquery('SELECT name, display_name, avatar_icon FROM user WHERE id = ?', row['user_id']).first
-      r['date'] = row['created_at'].strftime("%Y/%m/%d %H:%M:%S")
-      r['content'] = row['content']
-      response << r
-    end
-    response.reverse!
+    rows = db.xquery(<<~SQL, last_message_id, channel_id).to_a
+      SELECT message.id
+           , message.created_at AS created_at
+           , message.content AS content
+           , user.name AS name
+           , user.display_name AS display_name
+           , user.avatar_icon AS avatar_icon
+        FROM message
+        JOIN user ON user.id = message.user_id
+       WHERE message.id > ? AND message.channel_id = ?
+    ORDER BY message.id
+       LIMIT 100
+    SQL
 
-    max_message_id = rows.empty? ? 0 : rows.map { |row| row['id'] }.max
+    response = rows.map { |row|
+      {
+        'id' => row['id'],
+        'user' => {
+          'name' => row['name'],
+          'display_name' => row['display_name'],
+          'avatar_icon' => row['avatar_icon']
+        },
+        'date' => row['created_at'].strftime("%Y/%m/%d %H:%M:%S"),
+        'content' => row['content']
+      }
+    }.reverse
+
+    max_message_id = response.empty? ? 0 : response.map { |row| row['id'] }.max
+
     $redis.with do |redis|
       redis.hset("haveread:#{user_id}", channel_id.to_s, max_message_id.to_s)
     end
