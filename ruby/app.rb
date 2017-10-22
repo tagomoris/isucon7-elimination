@@ -343,8 +343,11 @@ class App < Sinatra::Base
 
     if avatar_name && avatar_data
       path = "/icons/#{avatar_name}"
-      WEB_SERVERS.each do |server|
-        upload_icon(server, path, avatar_data)
+      local_path = File.join(IMAGES_FOLDER, path)
+      unless File.exist?(local_path)
+        WEB_SERVERS.each do |server|
+          upload_icon(server, path, avatar_data)
+        end
       end
       db.xquery('UPDATE user SET avatar_icon = ? WHERE id = ?', avatar_name, user['id'])
     end
