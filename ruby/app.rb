@@ -2,6 +2,10 @@ require 'digest/sha1'
 require 'mysql2'
 require 'sinatra/base'
 
+$redis = ConnectionPool.new(size: 4, timeout: 3) do
+  Redis.new(url: ENV.fetch("REDIS_URL", "localhost"))
+end
+
 class App < Sinatra::Base
   configure do
     set :session_secret, 'tonymoris'
@@ -402,5 +406,9 @@ class App < Sinatra::Base
       return 'image/gif'
     end
     ''
+  end
+
+  def redis
+    @
   end
 end

@@ -4,3 +4,6 @@ gem 'mysql2'
 gem 'puma'
 gem 'sinatra'
 gem 'sinatra-contrib'
+gem 'hiredis'
+gem "redis", require: ["redis", "redis/connection/hiredis"]
+gem "connection_pool"
