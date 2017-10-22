@@ -1,0 +1,9 @@
+venv/
+go/
+nodejs/
+php/
+python/
+perl/
+ruby/vendor
+*~
+
