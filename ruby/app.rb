@@ -180,7 +180,7 @@ class App < Sinatra::Base
         JOIN user ON user.id = message.user_id
        WHERE message.id > ? AND message.channel_id = ?
     ORDER BY message.id DESC
-       LIMIT 100
+       LIMIT 1000
     SQL
 
     response = rows.map { |row|
