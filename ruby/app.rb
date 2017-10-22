@@ -224,19 +224,21 @@ class App < Sinatra::Base
       redis.hgetall("message_count")
     end.transform_values(&:to_i)
 
-    res = []
-    channel_ids.each do |channel_id|
-      max_message_id = havereads[channel_id.to_s]&.to_i
-      r = {}
-      r['channel_id'] = channel_id
-      r['unread'] = if max_message_id.nil?
-        message_counts[channel_id.to_s]
-      else
-        db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ? AND ? < id', channel_id, max_message_id).first['cnt']
-      end
-      res << r
-    end
+    channels = channel_ids.map { |id| [id, havereads[id.to_s]&.to_i] }
 
+    ids = channels.map { |id, max_id|
+      "(SELECT #{id} AS channel_id, #{max_id || 0} AS max_id)"
+    }.join(' UNION ALL ')
+
+    res = db.xquery(sql = <<~SQL).to_a
+      SELECT message.channel_id, COUNT(DISTINCT message.id) AS cnt
+        FROM message
+        JOIN (#{ids}) AS channels
+          ON message.channel_id = channels.channel_id
+         AND message.id > channels.max_id
+    GROUP BY message.channel_id
+    SQL
+    
     content_type :json
     res.to_json
   end
