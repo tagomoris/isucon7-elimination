@@ -125,8 +125,7 @@ class App < Sinatra::Base
 
   post '/login' do
     name = params[:name]
-    statement = db.query('SELECT * FROM user WHERE name = ?')
-    row = statement.execute(name).first
+    row = db.xquery('SELECT * FROM user WHERE name = ?', name).first
     if row.nil? || row['password'] != Digest::SHA1.hexdigest(row['salt'] + params[:password])
       return 403
     end
