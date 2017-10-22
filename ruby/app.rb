@@ -48,12 +48,12 @@ class App < Sinatra::Base
     db.query("DELETE FROM channel WHERE id > 10")
     db.query("DELETE FROM message WHERE id > 10000")
     db.query("DELETE FROM haveread")
-    $redis.with { |conn| conn.flushall } # clear redis
+    $redis.with { |redis| redis.flushall } # clear redis
 
     # initiali cache
-    db.query('SELECT * FROM channel ORDER BY id').each do |ch|
-      $redis.with do |conn|
-        conn.hset("channels", ch["id"].to_s, Oj.dump(ch))
+    db.query('SELECT id, name, description FROM channel ORDER BY id').each do |ch|
+      $redis.with do |redis|
+        redis.hset("channels", ch["id"].to_s, Oj.dump(ch))
       end
     end
 
@@ -282,6 +282,9 @@ class App < Sinatra::Base
     statement = db.prepare('INSERT INTO channel (name, description, updated_at, created_at) VALUES (?, ?, NOW(), NOW())')
     statement.execute(name, description)
     channel_id = db.last_id
+    $redis.with do |redis|
+      redis.hset("channels", channel_id.to_s, Oj.dump({"id" => channel_id, "name" => name, "description" => description}))
+    end
     statement.close
     redirect "/channel/#{channel_id}", 303
   end
@@ -411,14 +414,14 @@ class App < Sinatra::Base
 
   # @return Hash<id String>, <channel Hash>>
   def get_all_channels_from_redis
-    $redis.with do |conn|
-      conn.hgetall("channels").transform_values { |v| Oj.load(v) }
+    $redis.with do |redis|
+      redis.hgetall("channels").transform_values { |v| Oj.load(v) }
     end
   end
 
   def get_channel_from_redis(id)
-    $redis.with do |conn|
-      Oj.load(conn.hget("channels", id.to_s))
+    $redis.with do |redis|
+      Oj.load(redis.hget("channels", id.to_s))
     end
   end
 
