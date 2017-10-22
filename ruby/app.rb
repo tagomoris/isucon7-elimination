@@ -248,8 +248,8 @@ class App < Sinatra::Base
     @page = @page.to_i
 
     n = 20
-    rows = db.xquery(<<~SQL, @channel_id).to_a
-      SELECT (SELECT COUNT(*) AS cnt FROM message where message.channel_id = 1) AS cnt
+    rows = db.xquery(<<~SQL, @channel_id, @channel_id).to_a
+      SELECT (SELECT COUNT(distinct message.id) AS cnt FROM message where message.channel_id = ?) AS cnt
            , message.id
            , user.name AS name
            , user.display_name AS display_name
