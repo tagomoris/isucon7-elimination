@@ -170,11 +170,9 @@ class App < Sinatra::Base
     response.reverse!
 
     max_message_id = rows.empty? ? 0 : rows.map { |row| row['id'] }.max
-    db.xquery(<<~SQL, user_id, channel_id, max_message_id, max_message_id)
-      INSERT INTO haveread (user_id, channel_id, message_id, updated_at, created_at)
-      VALUES (?, ?, ?, NOW(), NOW())
-      ON DUPLICATE KEY UPDATE message_id = ?, updated_at = NOW()
-    SQL
+    $redis.with do |redis|
+      redis.hset("haveread:#{user_id}", channel_id.to_s, max_message_id.to_s)
+    end
 
     content_type :json
     response.to_json
@@ -188,18 +186,21 @@ class App < Sinatra::Base
 
     sleep 1.0
 
-    rows = db.query('SELECT id FROM channel').to_a
-    channel_ids = rows.map { |row| row['id'] }
+    channel_ids = get_all_channels_from_redis.keys.map(&:to_i)
+
+    havereads = $redis.with do |redis|
+      redis.hgetall("haveread:#{user_id}")
+    end
 
     res = []
     channel_ids.each do |channel_id|
-      row = db.xquery('SELECT * FROM haveread WHERE user_id = ? AND channel_id = ?', user_id, channel_id).first
+      max_message_id = havereads[channel_id.to_s]&.to_i
       r = {}
       r['channel_id'] = channel_id
-      r['unread'] = if row.nil?
+      r['unread'] = if max_message_id.nil?
         db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?', channel_id).first['cnt']
       else
-        db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ? AND ? < id', channel_id, row['message_id']).first['cnt']
+        db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ? AND ? < id', channel_id, max_message_id).first['cnt']
       end
       res << r
     end
