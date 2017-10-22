@@ -248,19 +248,36 @@ class App < Sinatra::Base
     @page = @page.to_i
 
     n = 20
-    rows = db.xquery("SELECT * FROM message WHERE channel_id = ? ORDER BY id DESC LIMIT #{n} OFFSET #{(@page - 1) * n}", @channel_id).to_a
-    @messages = []
-    rows.each do |row|
-      r = {}
-      r['id'] = row['id']
-      r['user'] = db.xquery('SELECT name, display_name, avatar_icon FROM user WHERE id = ?', row['user_id']).first
-      r['date'] = row['created_at'].strftime("%Y/%m/%d %H:%M:%S")
-      r['content'] = row['content']
-      @messages << r
-    end
-    @messages.reverse!
+    rows = db.xquery(<<~SQL, @channel_id).to_a
+      SELECT (SELECT COUNT(*) AS cnt FROM message where message.channel_id = 1) AS cnt
+           , message.id
+           , user.name AS name
+           , user.display_name AS display_name
+           , user.avatar_icon AS avatar_icon
+           , message.created_at AS created_at
+           , message.content AS content
+        FROM message
+        JOIN user ON message.user_id = user.id
+       WHERE channel_id = ?
+    ORDER BY id DESC
+       LIMIT #{n}
+      OFFSET #{(@page - 1) * n}
+    SQL
 
-    cnt = db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?', @channel_id).first['cnt'].to_f
+    @messages = rows.map { |row|
+      {
+        'id' => row['id'],
+        'user' => {
+          'name' => row['name'],
+          'display_name' => row['display_name'],
+          'avatar_icon' => row['avatar_icon']
+        },
+        'date' => row['created_at'].strftime("%Y/%m/%d %H:%M:%S"),
+        'content' => row['content']
+      }
+    }.reverse
+
+    cnt = rows.first&.fetch('cnt').to_f
     @max_page = cnt == 0 ? 1 :(cnt / n).ceil
 
     return 400 if @page > @max_page
