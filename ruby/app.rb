@@ -85,6 +85,12 @@ class App < Sinatra::Base
       end
     end
 
+    db.query('SELECT channel_id, COUNT(*) AS cnt FROM message GROUP BY channel_id').each do |row|
+      $redis.with do |redis|
+        redis.hset("message_count", row["channel_id"].to_s, row["cnt"])
+      end
+    end
+
     204
   end
 
@@ -214,13 +220,17 @@ class App < Sinatra::Base
       redis.hgetall("haveread:#{user_id}")
     end
 
+    message_counts = $redis.with do |redis|
+      redis.hgetall("message_count")
+    end.transform_values(&:to_i)
+
     res = []
     channel_ids.each do |channel_id|
       max_message_id = havereads[channel_id.to_s]&.to_i
       r = {}
       r['channel_id'] = channel_id
       r['unread'] = if max_message_id.nil?
-        db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?', channel_id).first['cnt']
+        message_counts[channel_id.to_s]
       else
         db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ? AND ? < id', channel_id, max_message_id).first['cnt']
       end
@@ -423,6 +433,9 @@ class App < Sinatra::Base
 
   def db_add_message(channel_id, user_id, content)
     messages = db.xquery('INSERT INTO message (channel_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())', channel_id, user_id, content)
+    $redis.with do |redis|
+      redis.hincrby("message_count", channel_id.to_s, 1)
+    end
     messages
   end
 
