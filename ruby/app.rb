@@ -225,7 +225,7 @@ class App < Sinatra::Base
     @page = @page.to_i
 
     n = 20
-    rows = db.xquery('SELECT * FROM message WHERE channel_id = ? ORDER BY id DESC LIMIT ? OFFSET ?', @channel_id, n, (@page - 1) * n).to_a
+    rows = db.xquery("SELECT * FROM message WHERE channel_id = ? ORDER BY id DESC LIMIT #{n} OFFSET #{(@page - 1) * n}", @channel_id).to_a
     @messages = []
     rows.each do |row|
       r = {}
