@@ -7,3 +7,4 @@ gem 'sinatra-contrib'
 gem 'hiredis'
 gem "redis", require: ["redis", "redis/connection/hiredis"]
 gem "connection_pool"
+gem "oj"

@@ -1,9 +1,14 @@
 require 'digest/sha1'
 require 'mysql2'
+require 'connection_pool'
+require 'hiredis'
+require 'redis/connection/hiredis'
+require 'redis'
+require 'oj'
 require 'sinatra/base'
 
 $redis = ConnectionPool.new(size: 4, timeout: 3) do
-  Redis.new(url: ENV.fetch("REDIS_URL", "localhost"))
+  Redis.new(url: ENV.fetch("REDIS_URL", "redis://localhost:6379"))
 end
 
 class App < Sinatra::Base
@@ -43,6 +48,15 @@ class App < Sinatra::Base
     db.query("DELETE FROM channel WHERE id > 10")
     db.query("DELETE FROM message WHERE id > 10000")
     db.query("DELETE FROM haveread")
+    $redis.with { |conn| conn.flushall } # clear redis
+
+    # initiali cache
+    db.query('SELECT * FROM channel ORDER BY id').each do |ch|
+      $redis.with do |conn|
+        conn.hset("channels", ch["id"].to_s, Oj.dump(ch))
+      end
+    end
+
     204
   end
 
@@ -395,6 +409,19 @@ class App < Sinatra::Base
     [channels, description]
   end
 
+  # @return Hash<id String>, <channel Hash>>
+  def get_all_channels_from_redis
+    $redis.with do |conn|
+      conn.hgetall("channels").transform_values { |v| Oj.load(v) }
+    end
+  end
+
+  def get_channel_from_redis(id)
+    $redis.with do |conn|
+      Oj.load(conn.hget("channels", id.to_s))
+    end
+  end
+
   def ext2mime(ext)
     if ['.jpg', '.jpeg'].include?(ext)
       return 'image/jpeg'
@@ -406,9 +433,5 @@ class App < Sinatra::Base
       return 'image/gif'
     end
     ''
-  end
-
-  def redis
-    @
   end
 end
