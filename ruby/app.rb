@@ -232,19 +232,7 @@ class App < Sinatra::Base
       r['unread'] = if max_message_id.nil?
         message_counts[channel_id.to_s]
       else
-        cache = $redis.with do |redis|
-          redis.get("message_count_by_max:#{channel_id}:#{max_message_id}")
-        end
-
-        if cache
-          cache.to_i
-        else
-          result = db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ? AND ? < id', channel_id, max_message_id).first['cnt']
-          $redis.with do |redis|
-            redis.set("message_count_by_max:#{channel_id}:#{max_message_id}", result)
-          end
-          result
-        end
+        db.xquery('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ? AND ? < id', channel_id, max_message_id).first['cnt']
       end
       res << r
     end
