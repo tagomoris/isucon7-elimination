@@ -401,13 +401,11 @@ class App < Sinatra::Base
   end
 
   def get_channel_list_info(focus_channel_id = nil)
-    channels = db.query('SELECT * FROM channel ORDER BY id').to_a
+    channels = get_all_channels_from_redis.values.sort_by { |ch| ch["id"] }
     description = ''
-    channels.each do |channel|
-      if channel['id'] == focus_channel_id
-        description = channel['description']
-        break
-      end
+    if focus_channel_id
+      focused = get_channel_from_redis(focus_channel_id)
+      description = focused['description']
     end
     [channels, description]
   end
