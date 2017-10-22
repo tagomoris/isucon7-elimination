@@ -1,4 +1,5 @@
 require 'digest/sha1'
+require 'net/http'
 require 'mysql2'
 require 'mysql2-cs-bind'
 require 'connection_pool'
@@ -12,6 +13,7 @@ $redis = ConnectionPool.new(size: 4, timeout: 3) do
   Redis.new(url: ENV.fetch("REDIS_URL", "redis://localhost:6379"))
 end
 
+WEB_SERVERS = ENV.fetch("SERVERS", "localhost:5000").split(',')
 
 Mysql2::Client.new(
   host: ENV.fetch('ISUBATA_DB_HOST') { 'localhost' },
@@ -34,12 +36,16 @@ $db = ConnectionPool::Wrapper.new(size: 16, timeout: 3) do
 end
 
 class App < Sinatra::Base
+  PUBLIC_FOLDER = File.expand_path('../../public', __FILE__)
+  IMAGES_FOLDER = File.join(File.expand_path('../../public', __FILE__), "images")
+
   configure do
     set :session_secret, 'tonymoris'
-    set :public_folder, File.expand_path('../../public', __FILE__)
+    set :public_folder, PUBLIC_FOLDER
     set :avatar_max_size, 1 * 1024 * 1024
 
     enable :sessions
+    # enable :logging
   end
 
   configure :development do
@@ -264,7 +270,7 @@ class App < Sinatra::Base
     @self_profile = user['id'] == @user['id']
     erb :profile
   end
-  
+
   get '/add_channel' do
     if user.nil?
       return redirect '/login', 303
@@ -290,6 +296,15 @@ class App < Sinatra::Base
       redis.hset("channels", channel_id.to_s, Oj.dump({"id" => channel_id, "name" => name, "description" => description}))
     end
     redirect "/channel/#{channel_id}", 303
+  end
+
+  def upload_icon(server, path, data)
+    host, port = server.split(':')
+    port = (port || 80).to_i
+    p(host: host, port: port, path: path, data_size: data.size)
+    Net::HTTP.start(host, port) do |http|
+      http.put(path, data, {'Content-Type' => 'application/octet-stream'})
+    end
   end
 
   post '/profile' do
@@ -326,8 +341,11 @@ class App < Sinatra::Base
       end
     end
 
-    if !avatar_name.nil? && !avatar_data.nil?
-      db.xquery('INSERT INTO image (name, data) VALUES (?, ?)', avatar_name, avatar_data)
+    if avatar_name && avatar_data
+      path = "/icons/#{avatar_name}"
+      WEB_SERVERS.each do |server|
+        upload_icon(server, path, avatar_data)
+      end
       db.xquery('UPDATE user SET avatar_icon = ? WHERE id = ?', avatar_name, user['id'])
     end
 
@@ -338,14 +356,20 @@ class App < Sinatra::Base
     redirect '/', 303
   end
 
+  put '/icons/:file_name' do
+    file_name = params[:file_name]
+    content_body = request.body.read
+    File.open(File.join(IMAGES_FOLDER, file_name), 'w') do |f|
+      f.write content_body
+    end
+    200
+  end
+
   get '/icons/:file_name' do
     file_name = params[:file_name]
-    row = db.xquery('SELECT * FROM image WHERE name = ?', file_name).first
-    ext = file_name.include?('.') ? File.extname(file_name) : ''
-    mime = ext2mime(ext)
-    if !row.nil? && !mime.empty?
-      content_type mime
-      return row['data']
+    path = File.join(IMAGES_FOLDER, file_name)
+    if File.exist?(path)
+      return File.open(path){|f| f.read }
     end
     404
   end
